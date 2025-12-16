@@ -1,9 +1,14 @@
 const path = require("path");
 
-const buildNextEslintCommand = (filenames) =>
-  `yarn next:lint --fix --file ${filenames
+const buildNextEslintCommand = (filenames) => {
+  const filtered = filenames.filter(
+    (f) => !f.includes("next-env.d.ts") && !f.includes("deployedContracts.ts")
+  );
+  if (filtered.length === 0) return "echo 'No files to lint'";
+  return `yarn next:lint --fix --file ${filtered
     .map((f) => path.relative(path.join("packages", "nextjs"), f))
     .join(" --file ")}`;
+};
 
 const checkTypesNextCommand = () => "yarn next:check-types";
 

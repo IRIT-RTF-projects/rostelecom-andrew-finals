@@ -1,74 +1,137 @@
 "use client";
 
-import Link from "next/link";
-import { Address } from "@scaffold-ui/components";
+import { useState } from "react";
+import { Address, AddressInput } from "@scaffold-ui/components";
 import type { NextPage } from "next";
+import { Address as AddressType, formatEther } from "viem";
 import { hardhat } from "viem/chains";
 import { useAccount } from "wagmi";
-import { BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 import { useTargetNetwork } from "~~/hooks/scaffold-eth";
+import { notification } from "~~/utils/scaffold-eth";
 
 const Home: NextPage = () => {
   const { address: connectedAddress } = useAccount();
   const { targetNetwork } = useTargetNetwork();
+  const [checkAddress, setCheckAddress] = useState<AddressType | undefined>(undefined);
+
+  const { data: licensePrice } = useScaffoldReadContract({
+    contractName: "LicenseContract",
+    functionName: "licensePrice",
+  });
+
+  const { data: hasLicense } = useScaffoldReadContract({
+    contractName: "LicenseContract",
+    functionName: "hasLicense",
+    args: [connectedAddress] as readonly [string | undefined],
+  });
+
+  const { data: totalLicensesSold } = useScaffoldReadContract({
+    contractName: "LicenseContract",
+    functionName: "totalLicensesSold",
+  });
+
+  const { data: checkedLicense } = useScaffoldReadContract({
+    contractName: "LicenseContract",
+    functionName: "checkLicense",
+    args: [checkAddress] as readonly [string | undefined],
+  });
+
+  const { writeContractAsync: writeLicenseContractAsync } = useScaffoldWriteContract({
+    contractName: "LicenseContract",
+  });
+
+  const handlePurchaseLicense = async () => {
+    if (!licensePrice) return;
+
+    try {
+      await writeLicenseContractAsync({
+        functionName: "purchaseLicense",
+        value: licensePrice,
+      });
+      notification.success("License purchased successfully!");
+    } catch (error) {
+      console.error("Error purchasing license:", error);
+      notification.error("Failed to purchase license");
+    }
+  };
 
   return (
     <>
       <div className="flex items-center flex-col grow pt-10">
-        <div className="px-5">
+        <div className="px-5 w-full max-w-4xl">
           <h1 className="text-center">
-            <span className="block text-2xl mb-2">Welcome to</span>
-            <span className="block text-4xl font-bold">Scaffold-ETH 2</span>
+            <span className="block text-2xl mb-2">License Purchase System</span>
+            <span className="block text-4xl font-bold">One Wallet, One License</span>
           </h1>
-          <div className="flex justify-center items-center space-x-2 flex-col">
-            <p className="my-2 font-medium">Connected Address:</p>
-            <Address
-              address={connectedAddress}
-              chain={targetNetwork}
-              blockExplorerAddressLink={
-                targetNetwork.id === hardhat.id ? `/blockexplorer/address/${connectedAddress}` : undefined
-              }
-            />
-          </div>
-          <p className="text-center text-lg">
-            Get started by editing{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/nextjs/app/page.tsx
-            </code>
-          </p>
-          <p className="text-center text-lg">
-            Edit your smart contract{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              YourContract.sol
-            </code>{" "}
-            in{" "}
-            <code className="italic bg-base-300 text-base font-bold max-w-full break-words break-all inline-block">
-              packages/hardhat/contracts
-            </code>
-          </p>
-        </div>
 
-        <div className="grow bg-base-300 w-full mt-16 px-8 py-12">
-          <div className="flex justify-center items-center gap-12 flex-col md:flex-row">
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center max-w-xs rounded-3xl">
-              <BugAntIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Tinker with your smart contract using the{" "}
-                <Link href="/debug" passHref className="link">
-                  Debug Contracts
-                </Link>{" "}
-                tab.
-              </p>
+          <div className="mt-8 space-y-6">
+            <div className="bg-base-100 rounded-3xl p-6 shadow-lg">
+              <h2 className="text-2xl font-bold mb-4">License Information</h2>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">License Price:</span>
+                  <span className="text-lg font-bold">
+                    {licensePrice ? `${formatEther(licensePrice)} ETH` : "Loading..."}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Total Licenses Sold:</span>
+                  <span className="text-lg font-bold">{totalLicensesSold?.toString() || "0"}</span>
+                </div>
+              </div>
             </div>
-            <div className="flex flex-col bg-base-100 px-10 py-10 text-center items-center max-w-xs rounded-3xl">
-              <MagnifyingGlassIcon className="h-8 w-8 fill-secondary" />
-              <p>
-                Explore your local transactions with the{" "}
-                <Link href="/blockexplorer" passHref className="link">
-                  Block Explorer
-                </Link>{" "}
-                tab.
-              </p>
+
+            {connectedAddress && (
+              <div className="bg-base-100 rounded-3xl p-6 shadow-lg">
+                <h2 className="text-2xl font-bold mb-4">Your License Status</h2>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Your Address:</span>
+                    <Address
+                      address={connectedAddress}
+                      chain={targetNetwork}
+                      blockExplorerAddressLink={
+                        targetNetwork.id === hardhat.id ? `/blockexplorer/address/${connectedAddress}` : undefined
+                      }
+                    />
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">License Status:</span>
+                    <span className={`text-lg font-bold ${hasLicense ? "text-success" : "text-error"}`}>
+                      {hasLicense ? "✓ Active" : "✗ Not Purchased"}
+                    </span>
+                  </div>
+                  {!hasLicense && (
+                    <button
+                      className="btn btn-primary w-full mt-4"
+                      onClick={handlePurchaseLicense}
+                      disabled={!licensePrice}
+                    >
+                      Purchase License
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="bg-base-100 rounded-3xl p-6 shadow-lg">
+              <h2 className="text-2xl font-bold mb-4">Check License</h2>
+              <div className="space-y-3">
+                <AddressInput
+                  placeholder="Enter address to check"
+                  value={checkAddress ?? ""}
+                  onChange={value => setCheckAddress(value as AddressType)}
+                />
+                {checkAddress && (
+                  <div className="flex justify-between items-center mt-4">
+                    <span className="font-medium">License Status:</span>
+                    <span className={`text-lg font-bold ${checkedLicense ? "text-success" : "text-error"}`}>
+                      {checkedLicense ? "✓ Active" : "✗ Not Purchased"}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
